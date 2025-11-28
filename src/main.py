@@ -1,26 +1,36 @@
 import sys
 from PySide6.QtWidgets import QApplication
 
-#imports relatifs aux sous-dossiers
+# Imports des classes POO
 from sequenceur.moteur_audio import MoteurAudio
+from sequenceur.coeur import SequenceurCore
 from interface.fenetre_principale import FenetrePrincipale
+from interface.style import THEME_SOMBRE
 
-#chemin sample test
-SAMPLE_TEST_PATH = "assets\sounds\Cymatics - EDM Starter Pack\Synths - Loops\Chord Loops\Cymatics - Chord Loop 22 - Gm 150 BPM.wav"
+# Chemin sample test
+# NOTE: Nous allons utiliser un sample général pour initialiser le moteur
+# car le SequenceurCore chargera les samples spécifiques des pistes.
+SAMPLE_TEST_PATH = "assets/sounds/KICK/kick_01.wav" 
 
 def main():
-    """
-    Point d'entrée principal: Assemble les classes et lance l'application
-    """
+    """Point d'entrée principal: Assemble les classes et lance l'application."""
     
-    #1. Initialiser le moteur audio
+    # 1. Initialiser le Moteur Audio
     moteur_audio = MoteurAudio(SAMPLE_TEST_PATH)
     
-    #2. Créer l'application PySide
+    # 2. Initialiser le Cœur du Séquenceur, en lui passant le moteur audio
+    sequenceur_core = SequenceurCore(moteur_audio)
+    
+    # 3. Créer l'application PySide
     app = QApplication(sys.argv)
     
-    # 3. Créer la fenêtre, en lui passant le moteur audio pour la connexion
-    window = FenetrePrincipale(moteur_audio)
+    #Application du style
+    app.setStyle("Fusion")
+    app.setStyleSheet(THEME_SOMBRE)
+    
+    # 4. Créer la fenêtre, en lui passant le Cœur
+    # L'interface aura accès aux pistes via le Core.
+    window = FenetrePrincipale(sequenceur_core)
     window.show()
     
     sys.exit(app.exec())
