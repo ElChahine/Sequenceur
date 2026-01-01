@@ -3,41 +3,39 @@
 classDiagram
     direction LR
 
-    class Sequenceur {
-        +int tempo
-        +list~Piste~ pistes
-        +jouer()
-        +pause()
-        +ajouter_piste(piste)
-        +definir_tempo(bpm)
+    class FenetrePrincipale {
+        +QTimer timer
+        +bool est_en_lecture
+        +toggle_lecture()
+        +boucle_de_lecture()
+    }
+
+    class SequenceurCore {
+        +List[Piste] pistes
+        +MoteurAudio moteur_audio
+        +int step_actuel
+        +int bpm
+        +jouer_step_actuel()
+        +pas_suivant()
+        +update_step(piste_idx, step_idx, actif)
+        +jouer_piste_test(index)
     }
 
     class Piste {
         +string nom
-        +string chemin_sample
-        +list~Pattern~ patterns
-        +ajouter_pattern(pattern)
-    }
-
-    class Pattern {
-        +list~list~ grille
-        +ajouter_note(x, y)
-        +supprimer_note(x, y)
+        +string sample_path
+        +bool is_mute
+        +List[bool] pattern
     }
 
     class MoteurAudio {
-        +charger_son(chemin)
-        +jouer_son(son)
+        +load_sample(chemin)
+        +play_sample()
+        +set_volume(valeur)
     }
 
-    class GestionProjet {
-        +sauvegarder(sequenceur, chemin)
-        +charger(chemin)
-    }
-
-    Sequenceur "1" --* " " Piste : contient
-    Piste "1" --* " " Pattern : contient
-    Sequenceur ..> MoteurAudio : utilise
-    GestionProjet ..> Sequenceur : sauvegarde / charge
+    FenetrePrincipale --> SequenceurCore : pilote via Timer
+    SequenceurCore "1" *-- "n" Piste : contient
+    SequenceurCore ..> MoteurAudio : utilise
 
 ```
