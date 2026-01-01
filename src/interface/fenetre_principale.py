@@ -1,75 +1,132 @@
-from PySide6.QtWidgets import QMainWindow, QPushButton, QWidget, QVBoxLayout, QGridLayout, QLabel, QCheckBox
-from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (
+    QMainWindow, QPushButton, QWidget, QVBoxLayout, 
+    QGridLayout, QLabel, QCheckBox, QHBoxLayout
+)
+from PySide6.QtCore import Qt, QTimer  # <--- AJOUT IMPORTANT : QTimer
 
 class FenetrePrincipale(QMainWindow):
     """
     Fenêtre principale de l'application (GUI).
-
-    Cette classe gère l'affichage de l'interface utilisateur avec PySide6 
-    et capture les interactions (clics) pour les transmettre au SequenceurCore.
+    Version : Décembre Finale (Lecture en Boucle)
     """
 
     def __init__(self, sequenceur_core_instance):
-        """
-        Initialise l'interface graphique et construit les widgets.
-
-        Args:
-            sequenceur_core_instance (SequenceurCore): Une référence vers le cœur logique
-                                                       de l'application pour connecter les boutons.
-        """
         super().__init__() 
-        self.setWindowTitle("Séquenceur Python - Prototype pistes (Novembre)")
-        self.setGeometry(100, 100, 600, 400)
+        self.setWindowTitle("Séquenceur Python - Décembre (Final)")
+        self.setGeometry(100, 100, 850, 400)
         self.sequenceur_core = sequenceur_core_instance
         
-        # Structure de la fenêtre (Widget central et Layout principal)
+        # --- TIMER (Le Métronome) ---
+        self.timer = QTimer()
+        # Calcul du temps en ms pour 120 BPM (4 steps par temps)
+        # 60 sec / 120 BPM / 4 = 0.125 sec = 125 ms
+        self.timer.setInterval(125) 
+        self.timer.timeout.connect(self.boucle_de_lecture)
+        self.est_en_lecture = False
+
+        # --- UI ---
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
 
-        # Grille pour aligner les noms de pistes et les boutons
         pistes_grid = QGridLayout()
         main_layout.addLayout(pistes_grid)
         
-        # En-tête de la grille
-        pistes_grid.addWidget(QLabel("PISTES:"), 0, 0, Qt.AlignmentFlag.AlignLeft) 
+        pistes_grid.addWidget(QLabel("PISTES"), 0, 0)
+        pistes_grid.addWidget(QLabel("PATTERN (16 Steps)"), 0, 1, Qt.AlignmentFlag.AlignCenter)
+        pistes_grid.addWidget(QLabel("CONTRÔLES"), 0, 2)
 
-        # Génération dynamique des contrôles pour chaque piste
         for i, piste in enumerate(self.sequenceur_core.pistes):
-                    # 1. Nom de la piste
-                    pistes_grid.addWidget(QLabel(piste.nom), i + 1, 0)
-                    
-                    # 2. Bouton de test
-                    # On remplace le f-string ici aussi par une concaténation simple ou format %
-                    nom_bouton = "Test %s" % piste.nom
-                    btn = QPushButton(nom_bouton)
-                    
-                    btn.clicked.connect(lambda _, index=i: self.sequenceur_core.jouer_piste_test(index))
-                    pistes_grid.addWidget(btn, i + 1, 1)
+            # Nom
+            label_nom = QLabel(piste.nom)
+            label_nom.setStyleSheet("font-weight: bold; font-size: 14px;")
+            pistes_grid.addWidget(label_nom, i + 1, 0)
+            
+            # Steps
+            widget_steps = QWidget()
+            layout_steps = QHBoxLayout()
+            layout_steps.setContentsMargins(0, 0, 0, 0) 
+            widget_steps.setLayout(layout_steps)
+            
+            for step in range(16):
+                case = QCheckBox()
+                case.setToolTip("Pas %d" % (step + 1))
+                case.toggled.connect(lambda checked, p=i, s=step: self.sequenceur_core.update_step(p, s, checked))
+                layout_steps.addWidget(case)
+            
+            pistes_grid.addWidget(widget_steps, i + 1, 1)
 
-                    # 3. Case pour muter une piste
-                    mute_box = QCheckBox("Mute")
-                    # de couleur rouge
-                    mute_box.setStyleSheet("color: #ff5555;") 
-                    
-                    # Connexion : Change la variable 'is_mute' de la piste quand on coche
-                    mute_box.toggled.connect(lambda checked, p=piste: setattr(p, 'is_mute', checked))
-                    
-                    pistes_grid.addWidget(mute_box, i + 1, 2)
-                    
+            # Contrôles
+            widget_controles = QWidget()
+            layout_controles = QHBoxLayout()
+            layout_controles.setContentsMargins(0, 0, 0, 0)
+            widget_controles.setLayout(layout_controles)
+            
+            mute_box = QCheckBox("Mute")
+            mute_box.setStyleSheet("color: #ff5555;") 
+            mute_box.toggled.connect(lambda checked, p=piste: setattr(p, 'is_mute', checked))
+            layout_controles.addWidget(mute_box)
+
+            btn_test = QPushButton("Test")
+            btn_test.setFixedWidth(50) 
+            btn_test.clicked.connect(lambda _, index=i: self.sequenceur_core.jouer_piste_test(index))
+            layout_controles.addWidget(btn_test)
+
+            pistes_grid.addWidget(widget_controles, i + 1, 2)
+
+        main_layout.addSpacing(20) 
         
-        #Contrôle du volume (prototype)
-        
-        # Bouton pour mettre le volume à 50%
-        btn_vol_low = QPushButton("Volume 50%")
-        # On passe par sequenceur_core -> moteur_audio
+        # Volume
+        volume_layout = QHBoxLayout()
+        volume_layout.addWidget(QLabel("Volume Global :"))
+        btn_vol_low = QPushButton("50%")
         btn_vol_low.clicked.connect(lambda: self.sequenceur_core.moteur_audio.set_volume(0.5))
-        main_layout.addWidget(btn_vol_low)
-
-        # Bouton pour remettre le volume à 100%
-        btn_vol_high = QPushButton("Volume 100%")
+        volume_layout.addWidget(btn_vol_low)
+        btn_vol_high = QPushButton("100%")
         btn_vol_high.clicked.connect(lambda: self.sequenceur_core.moteur_audio.set_volume(1.0))
-        main_layout.addWidget(btn_vol_high)
+        volume_layout.addWidget(btn_vol_high)
+        volume_layout.addStretch() 
+        main_layout.addLayout(volume_layout)
 
-        # Ajout d'un bouton de contrôle général
-        main_layout.addWidget(QPushButton("Lecture/Stop Global (à implémenter en Décembre)"))
+        # --- LE GROS BOUTON PLAY ---
+        self.btn_play_loop = QPushButton("LECTURE ▶")
+        self.btn_play_loop.setStyleSheet("""
+            QPushButton {
+                background-color: #00d4ff; 
+                color: black; 
+                font-weight: bold; 
+                padding: 15px;
+                font-size: 16px;
+                border-radius: 5px;
+            }
+            QPushButton:hover { background-color: #55e4ff; }
+        """)
+        # Connexion à la fonction toggle_lecture
+        self.btn_play_loop.clicked.connect(self.toggle_lecture)
+        main_layout.addWidget(self.btn_play_loop)
+
+    def toggle_lecture(self):
+        """Active ou désactive le Timer"""
+        if self.est_en_lecture:
+            # On stoppe
+            self.timer.stop()
+            self.est_en_lecture = False
+            self.btn_play_loop.setText("LECTURE ▶")
+            self.btn_play_loop.setStyleSheet("background-color: #00d4ff; color: black; font-weight: bold; padding: 15px; font-size: 16px; border-radius: 5px;")
+        else:
+            # On démarre
+            self.timer.start()
+            self.est_en_lecture = True
+            self.btn_play_loop.setText("STOP ■")
+            self.btn_play_loop.setStyleSheet("background-color: #ff5555; color: white; font-weight: bold; padding: 15px; font-size: 16px; border-radius: 5px;")
+
+    def boucle_de_lecture(self):
+        """
+        Cette fonction est appelée automatiquement toutes les 125ms.
+        Elle orchestre le séquenceur.
+        """
+        # 1. Jouer les sons du pas actuel
+        self.sequenceur_core.jouer_step_actuel()
+        
+        # 2. Passer au pas suivant pour la prochaine fois
+        self.sequenceur_core.pas_suivant()
