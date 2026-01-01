@@ -88,7 +88,7 @@ class FenetrePrincipale(QMainWindow):
         volume_layout.addStretch() 
         main_layout.addLayout(volume_layout)
 
-        # --- LE GROS BOUTON PLAY ---
+        # Bouton play
         self.btn_play_loop = QPushButton("LECTURE ▶")
         self.btn_play_loop.setStyleSheet("""
             QPushButton {
