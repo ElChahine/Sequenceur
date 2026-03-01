@@ -1,41 +1,50 @@
+import json
 from PySide6.QtWidgets import (
     QMainWindow, QPushButton, QWidget, QVBoxLayout, 
-    QGridLayout, QLabel, QCheckBox, QHBoxLayout, QFrame,
-    QSlider
+    QGridLayout, QLabel, QCheckBox, QHBoxLayout, QSlider, QFileDialog
 )
 from PySide6.QtCore import Qt, QTimer
 
 class FenetrePrincipale(QMainWindow):
     """
     Interface graphique principale de l'application.
-    Gère l'affichage de la grille de pattern, les contrôles utilisateur et le timer de lecture.
+    Version Mars : Ajout de l'import de samples personnalisés.
     """
 
     def __init__(self, sequenceur_core_instance):
         super().__init__() 
-        self.setWindowTitle("Séquenceur Python")
-        self.setGeometry(100, 100, 1000, 450)
+        self.setWindowTitle("Séquenceur Python - Mars")
+        self.setGeometry(100, 100, 1000, 500)
         self.sequenceur_core = sequenceur_core_instance
         
-        # --- Timer de lecture (Métronome) ---
         self.timer = QTimer()
         self.bpm_actuel = 120
         self.update_timer_interval()
         self.timer.timeout.connect(self.boucle_de_lecture)
         self.est_en_lecture = False
 
-        # Matrice stockant les références vers les widgets QCheckBox
         self.matrice_cases = [] 
+        self.liste_mute_boxes = []
+        self.liste_labels_nom = [] # Pour pouvoir changer les noms des pistes (Nouveau)
 
-        # --- Initialisation UI ---
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
 
-        # En-tête
+        file_layout = QHBoxLayout()
+        btn_save = QPushButton("💾 Sauvegarder Projet")
+        btn_save.clicked.connect(self.sauvegarder_projet)
+        file_layout.addWidget(btn_save)
+
+        btn_load = QPushButton("📂 Charger Projet")
+        btn_load.clicked.connect(self.charger_projet)
+        file_layout.addWidget(btn_load)
+        
+        file_layout.addStretch()
+        main_layout.addLayout(file_layout)
+        
         main_layout.addWidget(QLabel("SÉQUENCEUR"), alignment=Qt.AlignmentFlag.AlignCenter)
 
-        # Grille principale
         pistes_grid = QGridLayout()
         main_layout.addLayout(pistes_grid)
         
@@ -43,14 +52,26 @@ class FenetrePrincipale(QMainWindow):
         pistes_grid.addWidget(QLabel("PATTERN (16 Pas)"), 0, 1, Qt.AlignmentFlag.AlignCenter)
         pistes_grid.addWidget(QLabel("CONTRÔLES"), 0, 2)
 
-        # Génération dynamique des pistes
         for i, piste in enumerate(self.sequenceur_core.pistes):
-            # Nom de la piste
+            # --- NOUVEAUTÉ MARS : Widget combinant Nom + Bouton Dossier ---
+            widget_nom = QWidget()
+            layout_nom = QHBoxLayout(widget_nom)
+            layout_nom.setContentsMargins(0, 0, 0, 0)
+            
             label_nom = QLabel(piste.nom)
             label_nom.setStyleSheet("font-weight: bold; font-size: 14px;")
-            pistes_grid.addWidget(label_nom, i + 1, 0)
+            self.liste_labels_nom.append(label_nom)
+            layout_nom.addWidget(label_nom)
             
-            # Conteneur des Steps
+            btn_charger_son = QPushButton("📂")
+            btn_charger_son.setFixedWidth(30)
+            btn_charger_son.setToolTip("Remplacer le sample de cette piste")
+            btn_charger_son.clicked.connect(lambda _, idx=i, lbl=label_nom: self.choisir_nouveau_sample(idx, lbl))
+            layout_nom.addWidget(btn_charger_son)
+            
+            pistes_grid.addWidget(widget_nom, i + 1, 0)
+            
+            # --- Reste de la grille (inchangé) ---
             widget_steps = QWidget()
             layout_steps = QHBoxLayout()
             layout_steps.setContentsMargins(0, 0, 0, 0) 
@@ -58,23 +79,17 @@ class FenetrePrincipale(QMainWindow):
             widget_steps.setLayout(layout_steps)
             
             ligne_cases = []
-            
             for step in range(16):
                 case = QCheckBox()
-                case.setToolTip(f"Piste {piste.nom} - Pas {step + 1}")
-                # Utilisation d'une lambda pour capturer les index i et step
+                case.setToolTip(f"Pas {step + 1}")
                 case.toggled.connect(lambda checked, p=i, s=step: self.sequenceur_core.update_step(p, s, checked))
-                
-                # Style CSS par défaut
                 case.setStyleSheet("QCheckBox::indicator { width: 20px; height: 20px; border: 1px solid #555; background: #333; } QCheckBox::indicator:checked { background: #00d4ff; }")
-                
                 layout_steps.addWidget(case)
                 ligne_cases.append(case)
             
             self.matrice_cases.append(ligne_cases)
             pistes_grid.addWidget(widget_steps, i + 1, 1)
 
-            # Contrôles par piste (Mute / Solo / Test)
             widget_controles = QWidget()
             layout_controles = QHBoxLayout()
             layout_controles.setContentsMargins(0, 0, 0, 0)
@@ -83,6 +98,7 @@ class FenetrePrincipale(QMainWindow):
             mute_box = QCheckBox("Mute")
             mute_box.setStyleSheet("color: #ff5555;") 
             mute_box.toggled.connect(lambda checked, p=piste: setattr(p, 'is_mute', checked))
+            self.liste_mute_boxes.append(mute_box)
             layout_controles.addWidget(mute_box)
 
             btn_test = QPushButton("Test")
@@ -97,7 +113,6 @@ class FenetrePrincipale(QMainWindow):
         # --- Barre de Contrôles Globaux ---
         controls_layout = QHBoxLayout()
         
-        # 1. Contrôle du Volume
         controls_layout.addWidget(QLabel("Volume :"))
         self.slider_volume = QSlider(Qt.Orientation.Horizontal)
         self.slider_volume.setRange(0, 100)
@@ -111,7 +126,6 @@ class FenetrePrincipale(QMainWindow):
         
         controls_layout.addSpacing(30)
 
-        # 2. Contrôle du BPM (Tempo)
         controls_layout.addWidget(QLabel("Tempo :"))
         self.slider_bpm = QSlider(Qt.Orientation.Horizontal)
         self.slider_bpm.setRange(60, 200)
@@ -126,7 +140,6 @@ class FenetrePrincipale(QMainWindow):
 
         controls_layout.addStretch()
 
-        # 3. Contrôle de lecture
         self.btn_play_loop = QPushButton("LECTURE ▶")
         self.btn_play_loop.setFixedWidth(200)
         self.btn_play_loop.setStyleSheet("background-color: #00d4ff; color: black; font-weight: bold; padding: 10px; border-radius: 5px;")
@@ -135,29 +148,69 @@ class FenetrePrincipale(QMainWindow):
         
         main_layout.addLayout(controls_layout)
 
-    # --- Méthodes de gestion ---
+
+    def choisir_nouveau_sample(self, index_piste, label_nom_widget):
+        """Ouvre un dialogue pour choisir un nouveau fichier .wav pour la piste."""
+        chemin_fichier, _ = QFileDialog.getOpenFileName(self, "Choisir un sample audio", "", "Fichiers WAV (*.wav)")
+        if chemin_fichier:
+            nouveau_nom = self.sequenceur_core.changer_sample_piste(index_piste, chemin_fichier)
+            if nouveau_nom:
+                label_nom_widget.setText(nouveau_nom)
+
+
+    def sauvegarder_projet(self):
+        chemin_fichier, _ = QFileDialog.getSaveFileName(self, "Sauvegarder le projet", "", "JSON Files (*.json)")
+        if chemin_fichier:
+            if not chemin_fichier.endswith(".json"):
+                chemin_fichier += ".json"
+            donnees = self.sequenceur_core.exporter_donnees()
+            try:
+                with open(chemin_fichier, 'w') as f:
+                    json.dump(donnees, f, indent=4)
+                print(f"Projet sauvegardé avec succès dans {chemin_fichier}")
+            except Exception as e:
+                print(f"Erreur lors de la sauvegarde : {e}")
+
+    def charger_projet(self):
+        chemin_fichier, _ = QFileDialog.getOpenFileName(self, "Charger un projet", "", "JSON Files (*.json)")
+        if chemin_fichier:
+            try:
+                with open(chemin_fichier, 'r') as f:
+                    donnees = json.load(f)
+                
+                self.sequenceur_core.importer_donnees(donnees)
+                
+                self.slider_bpm.setValue(self.sequenceur_core.bpm)
+                self.slider_volume.setValue(int(self.sequenceur_core.moteur_audio.volume_global * 100))
+                
+                for i_piste in range(len(self.sequenceur_core.pistes)):
+                    # Mise à jour du nom de la piste qui aurait pu changer
+                    self.liste_labels_nom[i_piste].setText(self.sequenceur_core.pistes[i_piste].nom)
+                    self.liste_mute_boxes[i_piste].setChecked(self.sequenceur_core.pistes[i_piste].is_mute)
+                    for i_step in range(16):
+                        etat_step = self.sequenceur_core.pistes[i_piste].pattern[i_step]
+                        self.matrice_cases[i_piste][i_step].setChecked(etat_step)
+
+                print(f"Projet chargé avec succès depuis {chemin_fichier}")
+            except Exception as e:
+                print(f"Erreur lors du chargement : {e}")
 
     def changer_volume(self, valeur_int):
-        """Met à jour le volume global via le moteur audio."""
         self.label_vol_text.setText(f"{valeur_int}%")
         self.sequenceur_core.moteur_audio.set_volume(valeur_int / 100.0)
 
     def changer_bpm(self, valeur_bpm):
-        """Met à jour le BPM et recalcule l'intervalle du timer."""
         self.bpm_actuel = valeur_bpm
         self.label_bpm_text.setText(f"{valeur_bpm} BPM")
         self.sequenceur_core.bpm = valeur_bpm
         self.update_timer_interval()
 
     def update_timer_interval(self):
-        """Calcule l'intervalle en ms pour une double-croche (1/4 de temps)."""
         if self.bpm_actuel > 0:
-            # Formule: 60000ms / BPM / 4 steps par mesure
             ms = int(60000 / self.bpm_actuel / 4)
             self.timer.setInterval(ms)
 
     def toggle_lecture(self):
-        """Active ou désactive le timer de lecture."""
         if self.est_en_lecture:
             self.timer.stop()
             self.est_en_lecture = False
@@ -171,32 +224,27 @@ class FenetrePrincipale(QMainWindow):
             self.btn_play_loop.setStyleSheet("background-color: #ff5555; color: white; font-weight: bold; padding: 10px; border-radius: 5px;")
 
     def boucle_de_lecture(self):
-        """Cycle principal appelé par le timer."""
         step = self.sequenceur_core.step_actuel
         self.update_visuel_step(step)
         self.sequenceur_core.jouer_step_actuel()
         self.sequenceur_core.pas_suivant()
 
     def update_visuel_step(self, step_actif):
-        """Met à jour le style des cases pour indiquer le curseur de lecture."""
         for i_piste in range(len(self.matrice_cases)):
             for i_step in range(16):
                 case = self.matrice_cases[i_piste][i_step]
                 if i_step == step_actif:
-                    # Style pour la colonne active (Curseur)
                     if case.isChecked():
                         case.setStyleSheet("QCheckBox::indicator { width: 20px; height: 20px; border: 2px solid white; background: #00ffff; }")
                     else:
                         case.setStyleSheet("QCheckBox::indicator { width: 20px; height: 20px; border: 2px solid white; background: #666; }")
                 else:
-                    # Style par défaut
                     if case.isChecked():
                         case.setStyleSheet("QCheckBox::indicator { width: 20px; height: 20px; border: 1px solid #555; background: #00d4ff; }")
                     else:
                         case.setStyleSheet("QCheckBox::indicator { width: 20px; height: 20px; border: 1px solid #555; background: #333; }")
 
     def reset_visuel(self):
-        """Réinitialise l'affichage visuel lors de l'arrêt."""
         for ligne in self.matrice_cases:
             for case in ligne:
                  if case.isChecked():

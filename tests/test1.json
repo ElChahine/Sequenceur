@@ -1,0 +1,72 @@
+{
+    "bpm": 175,
+    "volume": 1.0,
+    "pistes": [
+        {
+            "nom": "Kick",
+            "is_mute": false,
+            "pattern": [
+                false,
+                true,
+                false,
+                false,
+                false,
+                true,
+                false,
+                false,
+                false,
+                true,
+                false,
+                false,
+                false,
+                true,
+                false,
+                true
+            ]
+        },
+        {
+            "nom": "Snare",
+            "is_mute": false,
+            "pattern": [
+                false,
+                false,
+                true,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                true,
+                false,
+                false,
+                false,
+                false,
+                false
+            ]
+        },
+        {
+            "nom": "Hi-Hat",
+            "is_mute": false,
+            "pattern": [
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                true,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                true,
+                false
+            ]
+        }
+    ]
+}
