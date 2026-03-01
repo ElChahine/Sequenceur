@@ -53,7 +53,7 @@ class FenetrePrincipale(QMainWindow):
         pistes_grid.addWidget(QLabel("CONTRÔLES"), 0, 2)
 
         for i, piste in enumerate(self.sequenceur_core.pistes):
-            # --- NOUVEAUTÉ MARS : Widget combinant Nom + Bouton Dossier ---
+            
             widget_nom = QWidget()
             layout_nom = QHBoxLayout(widget_nom)
             layout_nom.setContentsMargins(0, 0, 0, 0)
@@ -71,7 +71,7 @@ class FenetrePrincipale(QMainWindow):
             
             pistes_grid.addWidget(widget_nom, i + 1, 0)
             
-            # --- Reste de la grille (inchangé) ---
+            
             widget_steps = QWidget()
             layout_steps = QHBoxLayout()
             layout_steps.setContentsMargins(0, 0, 0, 0) 
@@ -110,7 +110,7 @@ class FenetrePrincipale(QMainWindow):
 
         main_layout.addSpacing(20) 
         
-        # --- Barre de Contrôles Globaux ---
+    
         controls_layout = QHBoxLayout()
         
         controls_layout.addWidget(QLabel("Volume :"))
