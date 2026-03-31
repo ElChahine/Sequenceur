@@ -137,3 +137,23 @@ class MoteurAudio:
         if self.stream:
             self.stream.stop()
             self.stream.close()
+            
+    def appliquer_delay(self, signal, temps_ms=200, feedback=0.3):
+        if feedback <= 0:
+            return signal
+            
+        # Conversion du temps en nombre d'échantillons (samples)
+        nb_samples_delay = int((temps_ms / 1000.0) * 44100)
+        
+        # Création d'un buffer plus long pour accueillir l'écho
+        signal_traite = np.zeros(len(signal) + nb_samples_delay)
+        
+        # On place le son original au début
+        signal_traite[:len(signal)] = signal
+        
+        # On ajoute la version retardée et atténuée
+        # C'est ici que l'addition mathématique de janvier prend tout son sens
+        echo = signal * feedback
+        signal_traite[nb_samples_delay:nb_samples_delay + len(signal)] += echo
+        
+        return np.clip(signal_traite, -1.0, 1.0)

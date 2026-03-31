@@ -1,4 +1,6 @@
 import json
+import soundfile as sf
+
 from PySide6.QtWidgets import (
     QMainWindow, QPushButton, QWidget, QVBoxLayout, 
     QGridLayout, QLabel, QCheckBox, QHBoxLayout, QSlider, QFileDialog
@@ -39,6 +41,10 @@ class FenetrePrincipale(QMainWindow):
         btn_load = QPushButton("📂 Charger Projet")
         btn_load.clicked.connect(self.charger_projet)
         file_layout.addWidget(btn_load)
+        
+        btn_export = QPushButton("💾 Exporter WAV")
+        btn_export.clicked.connect(self.exporter_wav)
+        file_layout.addWidget(btn_export)
         
         file_layout.addStretch()
         main_layout.addLayout(file_layout)
@@ -137,6 +143,20 @@ class FenetrePrincipale(QMainWindow):
         self.label_bpm_text = QLabel("120 BPM")
         self.label_bpm_text.setFixedWidth(60)
         controls_layout.addWidget(self.label_bpm_text)
+        
+        controls_layout.addSpacing(30)
+        controls_layout.addWidget(QLabel("Effet Delay :"))
+
+        self.slider_delay = QSlider(Qt.Orientation.Horizontal)
+        self.slider_delay.setRange(0, 80) # De 0% à 80% de feedback
+        self.slider_delay.setValue(0)      # Désactivé par défaut
+        self.slider_delay.setFixedWidth(120)
+        self.slider_delay.valueChanged.connect(self.changer_intensite_delay)
+        controls_layout.addWidget(self.slider_delay)
+
+        self.label_delay_text = QLabel("0%")
+        self.label_delay_text.setFixedWidth(40)
+        controls_layout.addWidget(self.label_delay_text)
 
         controls_layout.addStretch()
 
@@ -251,3 +271,26 @@ class FenetrePrincipale(QMainWindow):
                     case.setStyleSheet("QCheckBox::indicator { width: 20px; height: 20px; border: 1px solid #555; background: #00d4ff; }")
                  else:
                     case.setStyleSheet("QCheckBox::indicator { width: 20px; height: 20px; border: 1px solid #555; background: #333; }")
+    
+    def exporter_wav(self):
+        """Ouvre un dialogue et enregistre le rendu NumPy en fichier WAV physique."""
+        chemin_fichier, _ = QFileDialog.getSaveFileName(
+            self, "Exporter la boucle", "ma_composition.wav", "WAV Files (*.wav)"
+        )
+        
+        if chemin_fichier:
+            try:
+                # Génération de 4 boucles pour un fichier exploitable
+                data_audio = self.sequenceur_core.generer_rendu_audio(nb_boucles=4)
+                
+                # Écriture sur le disque (Fréquence standard 44100 Hz)
+                sf.write(chemin_fichier, data_audio, 44100)
+                print(f"Exportation réussie : {chemin_fichier}")
+            except Exception as e:
+                print(f"Erreur lors de l'exportation : {e}")
+                
+    def changer_intensite_delay(self, valeur_int):
+        """Met à jour l'intensité de l'écho dans le moteur audio (Objectif Mars)."""
+        self.label_delay_text.setText(f"{valeur_int}%")
+        # On transmet la valeur au moteur via le coeur
+        self.sequenceur_core.moteur_audio.intensite_delay = valeur_int / 100.0

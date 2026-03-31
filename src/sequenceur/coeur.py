@@ -1,5 +1,6 @@
 # src/sequenceur/coeur.py
 import os
+import numpy as np
 
 class Piste:
     """Représente une piste audio avec son sample associé et son pattern rythmique."""
@@ -111,3 +112,39 @@ class SequenceurCore:
                     
                 self.pistes[i].is_mute = piste_data.get("is_mute", False)
                 self.pistes[i].pattern = piste_data.get("pattern", [False] * 16)
+
+    def generer_rendu_audio(self, nb_boucles=2):
+        """
+        Calcule mathématiquement le mixage de la boucle sans la jouer.
+        Retourne un tableau NumPy prêt à être sauvegardé.
+        """
+        # Calcul de la durée d'un pas en échantillons
+        # Formule : (60s / BPM / 4) * 44100
+        samples_par_pas = int((60 / self.bpm / 4) * 44100)
+        duree_totale_samples = samples_par_pas * 16 * nb_boucles
+        
+        # Initialisation du buffer (silence)
+        rendu_final = np.zeros(duree_totale_samples, dtype='float32')
+        
+        for piste in self.pistes:
+            if piste.is_mute:
+                continue
+                
+            sample_data = self.moteur_audio.cache_samples.get(piste.sample_path)
+            if sample_data is None:
+                continue
+                
+            for b in range(nb_boucles):
+                for step in range(16):
+                    if piste.pattern[step]:
+                        pos_start = (b * 16 * samples_par_pas) + (step * samples_par_pas)
+                        pos_end = pos_start + len(sample_data)
+                        
+                        if pos_end > duree_totale_samples:
+                            overlap = duree_totale_samples - pos_start
+                            rendu_final[pos_start:] += sample_data[:overlap]
+                        else:
+                            rendu_final[pos_start:pos_end] += sample_data
+                            
+        rendu_final *= self.moteur_audio.volume_global
+        return np.clip(rendu_final, -1.0, 1.0)
