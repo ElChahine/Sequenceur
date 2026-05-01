@@ -3,19 +3,24 @@ import soundfile as sf
 
 from PySide6.QtWidgets import (
     QMainWindow, QPushButton, QWidget, QVBoxLayout, 
-    QGridLayout, QLabel, QCheckBox, QHBoxLayout, QSlider, QFileDialog
+    QGridLayout, QLabel, QCheckBox, QHBoxLayout, QSlider, QFileDialog, QScrollArea
 )
 from PySide6.QtCore import Qt, QTimer
 
 class FenetrePrincipale(QMainWindow):
     """
-    Interface graphique principale de l'application.
-    Version Mars : Ajout de l'import de samples personnalisés.
+    Interface graphique principale développée avec PySide6.
+    Gère l'affichage de la grille de 64 pas, les contrôles et les interactions utilisateur.
     """
 
     def __init__(self, sequenceur_core_instance):
+        """
+        Initialise l'interface, la zone de défilement et les sliders de contrôle.
+        Args:
+            sequenceur_core_instance (SequenceurCore): Instance du cœur logique à piloter.
+        """
         super().__init__() 
-        self.setWindowTitle("Séquenceur Python - Mars")
+        self.setWindowTitle("Séquenceur Python")
         self.setGeometry(100, 100, 1000, 500)
         self.sequenceur_core = sequenceur_core_instance
         
@@ -27,7 +32,7 @@ class FenetrePrincipale(QMainWindow):
 
         self.matrice_cases = [] 
         self.liste_mute_boxes = []
-        self.liste_labels_nom = [] # Pour pouvoir changer les noms des pistes (Nouveau)
+        self.liste_labels_nom = []
 
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
@@ -51,19 +56,23 @@ class FenetrePrincipale(QMainWindow):
         
         main_layout.addWidget(QLabel("SÉQUENCEUR"), alignment=Qt.AlignmentFlag.AlignCenter)
 
-        pistes_grid = QGridLayout()
-        main_layout.addLayout(pistes_grid)
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setFixedHeight(350) # Hauteur fixe pour garder les contrôles visibles
+        
+        self.container_grille = QWidget()
+        pistes_grid = QGridLayout(self.container_grille)
+        self.scroll_area.setWidget(self.container_grille)
+       
+        main_layout.addWidget(self.scroll_area)
         
         pistes_grid.addWidget(QLabel("PISTES"), 0, 0)
-        pistes_grid.addWidget(QLabel("PATTERN (16 Pas)"), 0, 1, Qt.AlignmentFlag.AlignCenter)
+        pistes_grid.addWidget(QLabel("PATTERN (64 Pas)"), 0, 1, Qt.AlignmentFlag.AlignCenter)
         pistes_grid.addWidget(QLabel("CONTRÔLES"), 0, 2)
 
         for i, piste in enumerate(self.sequenceur_core.pistes):
-            
             widget_nom = QWidget()
             layout_nom = QHBoxLayout(widget_nom)
-            layout_nom.setContentsMargins(0, 0, 0, 0)
-            
             label_nom = QLabel(piste.nom)
             label_nom.setStyleSheet("font-weight: bold; font-size: 14px;")
             self.liste_labels_nom.append(label_nom)
@@ -71,25 +80,21 @@ class FenetrePrincipale(QMainWindow):
             
             btn_charger_son = QPushButton("📂")
             btn_charger_son.setFixedWidth(30)
-            btn_charger_son.setToolTip("Remplacer le sample de cette piste")
             btn_charger_son.clicked.connect(lambda _, idx=i, lbl=label_nom: self.choisir_nouveau_sample(idx, lbl))
             layout_nom.addWidget(btn_charger_son)
-            
             pistes_grid.addWidget(widget_nom, i + 1, 0)
             
-            
             widget_steps = QWidget()
-            layout_steps = QHBoxLayout()
-            layout_steps.setContentsMargins(0, 0, 0, 0) 
+            layout_steps = QHBoxLayout(widget_steps)
             layout_steps.setSpacing(2)
-            widget_steps.setLayout(layout_steps)
             
             ligne_cases = []
-            for step in range(16):
+            for step in range(64):
                 case = QCheckBox()
                 case.setToolTip(f"Pas {step + 1}")
                 case.toggled.connect(lambda checked, p=i, s=step: self.sequenceur_core.update_step(p, s, checked))
-                case.setStyleSheet("QCheckBox::indicator { width: 20px; height: 20px; border: 1px solid #555; background: #333; } QCheckBox::indicator:checked { background: #00d4ff; }")
+                # On réduit un peu la taille des cases pour que 64 tiennent mieux
+                case.setStyleSheet("QCheckBox::indicator { width: 18px; height: 18px; border: 1px solid #555; background: #333; } QCheckBox::indicator:checked { background: #00d4ff; }")
                 layout_steps.addWidget(case)
                 ligne_cases.append(case)
             
@@ -97,21 +102,15 @@ class FenetrePrincipale(QMainWindow):
             pistes_grid.addWidget(widget_steps, i + 1, 1)
 
             widget_controles = QWidget()
-            layout_controles = QHBoxLayout()
-            layout_controles.setContentsMargins(0, 0, 0, 0)
-            widget_controles.setLayout(layout_controles)
-            
+            layout_controles = QHBoxLayout(widget_controles)
             mute_box = QCheckBox("Mute")
-            mute_box.setStyleSheet("color: #ff5555;") 
             mute_box.toggled.connect(lambda checked, p=piste: setattr(p, 'is_mute', checked))
             self.liste_mute_boxes.append(mute_box)
             layout_controles.addWidget(mute_box)
-
+            
             btn_test = QPushButton("Test")
-            btn_test.setFixedWidth(50) 
             btn_test.clicked.connect(lambda _, index=i: self.sequenceur_core.jouer_piste_test(index))
             layout_controles.addWidget(btn_test)
-
             pistes_grid.addWidget(widget_controles, i + 1, 2)
 
         main_layout.addSpacing(20) 
@@ -170,7 +169,11 @@ class FenetrePrincipale(QMainWindow):
 
 
     def choisir_nouveau_sample(self, index_piste, label_nom_widget):
-        """Ouvre un dialogue pour choisir un nouveau fichier .wav pour la piste."""
+        """Ouvre un dialogue pour choisir un nouveau fichier .wav pour la piste.
+        Args:
+            index_piste (int): Indice de la piste cible.
+            label_nom_widget (QLabel): Widget texte à mettre à jour avec le nouveau nom.
+        """
         chemin_fichier, _ = QFileDialog.getOpenFileName(self, "Choisir un sample audio", "", "Fichiers WAV (*.wav)")
         if chemin_fichier:
             nouveau_nom = self.sequenceur_core.changer_sample_piste(index_piste, chemin_fichier)
@@ -179,6 +182,7 @@ class FenetrePrincipale(QMainWindow):
 
 
     def sauvegarder_projet(self):
+        """Déclenche la boîte de dialogue pour enregistrer le projet en JSON."""
         chemin_fichier, _ = QFileDialog.getSaveFileName(self, "Sauvegarder le projet", "", "JSON Files (*.json)")
         if chemin_fichier:
             if not chemin_fichier.endswith(".json"):
@@ -192,6 +196,7 @@ class FenetrePrincipale(QMainWindow):
                 print(f"Erreur lors de la sauvegarde : {e}")
 
     def charger_projet(self):
+        """Ouvre un projet JSON et synchronise tous les widgets."""
         chemin_fichier, _ = QFileDialog.getOpenFileName(self, "Charger un projet", "", "JSON Files (*.json)")
         if chemin_fichier:
             try:
@@ -207,7 +212,7 @@ class FenetrePrincipale(QMainWindow):
                     # Mise à jour du nom de la piste qui aurait pu changer
                     self.liste_labels_nom[i_piste].setText(self.sequenceur_core.pistes[i_piste].nom)
                     self.liste_mute_boxes[i_piste].setChecked(self.sequenceur_core.pistes[i_piste].is_mute)
-                    for i_step in range(16):
+                    for i_step in range(64):
                         etat_step = self.sequenceur_core.pistes[i_piste].pattern[i_step]
                         self.matrice_cases[i_piste][i_step].setChecked(etat_step)
 
@@ -216,10 +221,20 @@ class FenetrePrincipale(QMainWindow):
                 print(f"Erreur lors du chargement : {e}")
 
     def changer_volume(self, valeur_int):
+        """
+        Transmet le nouveau volume global au moteur audio.
+        Args:
+            valeur_int (int): Valeur du slider de 0 à 100.
+        """
         self.label_vol_text.setText(f"{valeur_int}%")
         self.sequenceur_core.moteur_audio.set_volume(valeur_int / 100.0)
 
     def changer_bpm(self, valeur_bpm):
+        """
+        Met à jour le tempo et ajuste l'intervalle du QTimer.
+        Args:
+            valeur_bpm (int): Nouveau tempo en battements par minute.
+        """
         self.bpm_actuel = valeur_bpm
         self.label_bpm_text.setText(f"{valeur_bpm} BPM")
         self.sequenceur_core.bpm = valeur_bpm
@@ -231,6 +246,7 @@ class FenetrePrincipale(QMainWindow):
             self.timer.setInterval(ms)
 
     def toggle_lecture(self):
+        """Démarre ou arrête la boucle de lecture du QTimer (Objectif Décembre)."""
         if self.est_en_lecture:
             self.timer.stop()
             self.est_en_lecture = False
@@ -250,8 +266,13 @@ class FenetrePrincipale(QMainWindow):
         self.sequenceur_core.pas_suivant()
 
     def update_visuel_step(self, step_actif):
+        """
+        Anime la grille en éclairant la colonne du pas en cours (Objectif Janvier).
+        Args:
+            step_actif (int): Indice du pas en train d'être joué.
+        """
         for i_piste in range(len(self.matrice_cases)):
-            for i_step in range(16):
+            for i_step in range(64):
                 case = self.matrice_cases[i_piste][i_step]
                 if i_step == step_actif:
                     if case.isChecked():
@@ -265,6 +286,9 @@ class FenetrePrincipale(QMainWindow):
                         case.setStyleSheet("QCheckBox::indicator { width: 20px; height: 20px; border: 1px solid #555; background: #333; }")
 
     def reset_visuel(self):
+        """
+        Réinitialise l'apparence de toute la grille de pas à son état d'origine.
+        """
         for ligne in self.matrice_cases:
             for case in ligne:
                  if case.isChecked():
@@ -290,7 +314,11 @@ class FenetrePrincipale(QMainWindow):
                 print(f"Erreur lors de l'exportation : {e}")
                 
     def changer_intensite_delay(self, valeur_int):
-        """Met à jour l'intensité de l'écho dans le moteur audio (Objectif Mars)."""
+        """
+        Ajuste l'effet d'écho en temps réel.
+        Args:
+            valeur_int (int): Intensité du feedback de 0 à 80.
+        """
         self.label_delay_text.setText(f"{valeur_int}%")
         # On transmet la valeur au moteur via le coeur
         self.sequenceur_core.moteur_audio.intensite_delay = valeur_int / 100.0

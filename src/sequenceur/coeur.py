@@ -2,13 +2,15 @@
 import os
 import numpy as np
 
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 class Piste:
     """Représente une piste audio avec son sample associé et son pattern rythmique."""
     def __init__(self, nom: str, sample_path: str):
         self.nom = nom
         self.sample_path = sample_path 
         self.is_mute = False 
-        self.pattern = [False] * 16
+        self.pattern = [False] * 64
 
 class SequenceurCore:
     """
@@ -77,27 +79,30 @@ class SequenceurCore:
         
     def pas_suivant(self):
         self.step_actuel += 1
-        if self.step_actuel >= 16:
+        if self.step_actuel >= 64:
             self.step_actuel = 0
 
     def exporter_donnees(self):
         donnees = {
             "bpm": self.bpm,
             "volume": self.moteur_audio.volume_global,
+            "intensite_delay": self.moteur_audio.intensite_delay,
             "pistes": []
         }
         for piste in self.pistes:
             donnees["pistes"].append({
                 "nom": piste.nom,
-                "sample_path": piste.sample_path, # On sauvegarde le chemin du son 
+                "sample_path": piste.sample_path,
                 "is_mute": piste.is_mute,
                 "pattern": piste.pattern.copy()
             })
         return donnees
 
     def importer_donnees(self, donnees: dict):
+        """Charge les données depuis le dictionnaire JSON."""
         self.bpm = donnees.get("bpm", 120)
         self.moteur_audio.set_volume(donnees.get("volume", 1.0))
+        self.moteur_audio.intensite_delay = donnees.get("intensite_delay", 0.0)
         
         pistes_sauvegardees = donnees.get("pistes", [])
         for i, piste_data in enumerate(pistes_sauvegardees):
@@ -111,7 +116,7 @@ class SequenceurCore:
                     self.pistes[i].nom = piste_data.get("nom", self.pistes[i].nom)
                     
                 self.pistes[i].is_mute = piste_data.get("is_mute", False)
-                self.pistes[i].pattern = piste_data.get("pattern", [False] * 16)
+                self.pistes[i].pattern = piste_data.get("pattern", [False] * 64)
 
     def generer_rendu_audio(self, nb_boucles=2):
         """
@@ -121,7 +126,7 @@ class SequenceurCore:
         # Calcul de la durée d'un pas en échantillons
         # Formule : (60s / BPM / 4) * 44100
         samples_par_pas = int((60 / self.bpm / 4) * 44100)
-        duree_totale_samples = samples_par_pas * 16 * nb_boucles
+        duree_totale_samples = samples_par_pas * 64 * nb_boucles
         
         # Initialisation du buffer (silence)
         rendu_final = np.zeros(duree_totale_samples, dtype='float32')
@@ -135,9 +140,9 @@ class SequenceurCore:
                 continue
                 
             for b in range(nb_boucles):
-                for step in range(16):
+                for step in range(64):
                     if piste.pattern[step]:
-                        pos_start = (b * 16 * samples_par_pas) + (step * samples_par_pas)
+                        pos_start = (b * 64 * samples_par_pas) + (step * samples_par_pas)
                         pos_end = pos_start + len(sample_data)
                         
                         if pos_end > duree_totale_samples:

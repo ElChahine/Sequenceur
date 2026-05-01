@@ -12,7 +12,11 @@ class MoteurAudio:
     """
 
     def __init__(self):
+        """
+        Initialise les paramètres audio, le cache des samples et le flux de sortie.
+        """
         self.volume_global = 1.0
+        self.intensite_delay = 0.0
         self.sample_rate = 44100
         
         # Cache des données audio chargées (Chemin -> numpy.array)
@@ -40,7 +44,10 @@ class MoteurAudio:
 
     def charger_sample_en_memoire(self, path: str):
         """
-        Charge un fichier audio, convertit les données en float32 mono et les stocke en RAM.
+        Charge un fichier WAV, le convertit en mono float32 et le stocke en RAM.
+        
+        Args:
+            path (str): Chemin absolu ou relatif vers le fichier audio.
         """
         if path in self.cache_samples:
             return
@@ -62,9 +69,11 @@ class MoteurAudio:
             print(f"Erreur chargement {path}: {e}")
 
     def jouer_mix(self, liste_chemins: list):
-        """
-        Ajoute une liste de sons à la file d'attente pour lecture immédiate.
-        Cette méthode est non-bloquante.
+        """"
+        Ajoute une liste de sons à la file d'attente pour une lecture immédiate.
+                
+        Args:
+            liste_chemins (list): Liste des chemins vers les samples à mixer.
         """
         if not liste_chemins:
             return
@@ -77,16 +86,16 @@ class MoteurAudio:
 
     def _audio_callback(self, outdata, frames, time, status):
         """
-        Callback audio exécutée par sounddevice dans un thread séparé.
-        Réalise le mixage (addition) des échantillons actifs.
+        Callback temps réel exécutée par sounddevice dans un thread haute priorité.
+        
+        Réalise le mixage additif des sons actifs, applique le volume global 
+        et effectue un écrêtage (clipping) pour éviter la saturation numérique.
         """
         if status:
             pass # Gestionnaire d'erreurs de flux (Xrun)
         
-        # 1. Initialisation du buffer de sortie à zéro (Silence)
         outdata.fill(0)
-        
-        # 2. Récupération des nouveaux sons depuis la file d'attente
+    
         try:
             while True:
                 new_sound = self.command_queue.get_nowait()
@@ -94,7 +103,6 @@ class MoteurAudio:
         except queue.Empty:
             pass
 
-        # 3. Traitement et mixage des sons actifs
         sons_restants = []
         mix_buffer = np.zeros(frames, dtype='float32')
         
@@ -102,17 +110,13 @@ class MoteurAudio:
             data = sound['data']
             cursor = sound['cursor']
             
-            # Calcul du nombre d'échantillons disponibles pour ce bloc
             n_frames = min(frames, len(data) - cursor)
             
             if n_frames > 0:
-                # Mixage additif
                 mix_buffer[:n_frames] += data[cursor : cursor + n_frames]
                 
-                # Mise à jour du curseur de lecture
                 sound['cursor'] += n_frames
                 
-                # Conservation du son s'il n'est pas terminé
                 if sound['cursor'] < len(data):
                     sons_restants.append(sound)
         
@@ -129,16 +133,32 @@ class MoteurAudio:
         outdata[:, 0] = mix_buffer
 
     def set_volume(self, valeur: float):
-        """Définit le volume global (0.0 à 1.0)."""
+        """
+        Définit le volume de sortie
+        
+        Args:
+            valeur (float): Coefficient entre 0.0 et 1.0
+        """
         self.volume_global = max(0.0, min(1.0, valeur))
 
     def stop_stream(self):
-        """Arrête proprement le flux audio."""
+        """
+        Arrête proprement le flux audio et libère les ressources matérielles.
+        """
         if self.stream:
             self.stream.stop()
             self.stream.close()
             
     def appliquer_delay(self, signal, temps_ms=200, feedback=0.3):
+        """
+        Applique un effet d'écho (Delay) sur un son
+        
+        
+        Args:
+            signal (np.array): Le signal audio source.
+            temps_ms (int): Délai avant la première répétition.
+            feedback (float): Intensité de réinjection de l'écho.
+        """
         if feedback <= 0:
             return signal
             
@@ -157,3 +177,25 @@ class MoteurAudio:
         signal_traite[nb_samples_delay:nb_samples_delay + len(signal)] += echo
         
         return np.clip(signal_traite, -1.0, 1.0)
+    
+    def appliquer_filtre_passe_bas(self, data, intensite=0.5):
+        """
+        Applique un filtre passe-bas simple (One-pole) via NumPy (Objectif Avril).
+        
+        Lisse le signal en atténuant les hautes fréquences par moyenne glissante.
+        
+        Args:
+            data (np.array): Le signal à filtrer.
+            intensite (float): Force de la coupure (0.0 à 1.0).
+        """
+        if intensite <= 0: return data
+        
+        out = np.zeros_like(data)
+        alpha = 1.0 - intensite
+        val_precedente = 0
+        
+        for i in range(len(data)):
+            out[i] = alpha * data[i] + (1 - alpha) * val_precedente
+            val_precedente = out[i]
+            
+        return out
