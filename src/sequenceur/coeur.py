@@ -5,8 +5,13 @@ import numpy as np
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 class Piste:
-    """Représente une piste audio avec son sample associé et son pattern rythmique."""
+    """
+    Représente une piste audio individuelle dans le séquenceur.
+    """
     def __init__(self, nom: str, sample_path: str):
+        """
+        Initialise une nouvelle piste avec son pattern rythmique à vide.
+        """
         self.nom = nom
         self.sample_path = sample_path 
         self.is_mute = False 
@@ -41,7 +46,8 @@ class SequenceurCore:
 
     def changer_sample_piste(self, index_piste: int, nouveau_chemin: str):
         """
-        NOUVEAUTÉ MARS : Change le sample d'une piste et met à jour son nom.
+        Remplace le fichier audio d'une piste spécifique (Objectif Mars).
+        Met à jour le cache du moteur audio et génère un nouveau nom de piste.
         """
         if 0 <= index_piste < len(self.pistes):
             # 1. Charger le nouveau son en RAM
@@ -58,15 +64,25 @@ class SequenceurCore:
         return None
 
     def jouer_piste_test(self, index_piste: int):
+        """
+        Déclenche immédiatement le son d'une piste pour prévisualisation.
+        """
         if 0 <= index_piste < len(self.pistes):
             path = self.pistes[index_piste].sample_path
             self.moteur_audio.jouer_mix([path])
 
     def update_step(self, index_piste: int, index_step: int, est_actif: bool):
+        """
+        Met à jour l'état d'un pas (activé ou désactivé) dans le pattern d'une piste.
+        """
         if 0 <= index_piste < len(self.pistes):
             self.pistes[index_piste].pattern[index_step] = est_actif
 
     def jouer_step_actuel(self):
+        """
+        Analyse les patterns de toutes les pistes pour le pas en cours.
+        Envoie la liste des sons à jouer au moteur audio de manière synchronisée.
+        """
         chemins_a_jouer = []
         for piste in self.pistes:
             if piste.pattern[self.step_actuel] and not piste.is_mute:
@@ -78,11 +94,18 @@ class SequenceurCore:
             self.moteur_audio.jouer_mix(chemins_a_jouer)
         
     def pas_suivant(self):
+        """
+        Incrémente le compteur de pas et assure le bouclage (0 à 63).
+        """
         self.step_actuel += 1
         if self.step_actuel >= 64:
             self.step_actuel = 0
 
     def exporter_donnees(self):
+        """
+        Série de données pour la persistance JSON
+        Capture l'état complet : BPM, volume, effets et patterns de 64 pas.
+        """
         donnees = {
             "bpm": self.bpm,
             "volume": self.moteur_audio.volume_global,
@@ -99,7 +122,9 @@ class SequenceurCore:
         return donnees
 
     def importer_donnees(self, donnees: dict):
-        """Charge les données depuis le dictionnaire JSON."""
+        """
+        Restaure l'état complet du séquenceur à partir d'un dictionnaire JSON.
+        """
         self.bpm = donnees.get("bpm", 120)
         self.moteur_audio.set_volume(donnees.get("volume", 1.0))
         self.moteur_audio.intensite_delay = donnees.get("intensite_delay", 0.0)

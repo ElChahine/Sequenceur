@@ -5,7 +5,7 @@ THEME_SOMBRE = """
         color: #ffffff;
     }
 
-    /* Style des textes (Labels) */
+    /* Style des textes*/
     QLabel {
         color: #e0e0e0;
         font-size: 14px;
@@ -33,15 +33,5 @@ THEME_SOMBRE = """
     QPushButton:pressed {
         background-color: #00d4ff;
         color: #000000;
-    }
-    
-    /* Style pour la case à cocher (si tu l'ajoutes plus tard) */
-    QCheckBox {
-        color: #ff5555;
-        spacing: 5px;
-    }
-    QCheckBox::indicator {
-        width: 15px;
-        height: 15px;
     }
 """

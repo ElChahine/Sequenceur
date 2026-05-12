@@ -1,5 +1,6 @@
 import json
 import soundfile as sf
+from interface.style import THEME_SOMBRE
 
 from PySide6.QtWidgets import (
     QMainWindow, QPushButton, QWidget, QVBoxLayout, 
@@ -19,7 +20,8 @@ class FenetrePrincipale(QMainWindow):
         Args:
             sequenceur_core_instance (SequenceurCore): Instance du cœur logique à piloter.
         """
-        super().__init__() 
+        super().__init__()
+        self.setStyleSheet(THEME_SOMBRE)
         self.setWindowTitle("Séquenceur Python")
         self.setGeometry(100, 100, 1000, 500)
         self.sequenceur_core = sequenceur_core_instance
@@ -67,8 +69,37 @@ class FenetrePrincipale(QMainWindow):
         main_layout.addWidget(self.scroll_area)
         
         pistes_grid.addWidget(QLabel("PISTES"), 0, 0)
-        pistes_grid.addWidget(QLabel("PATTERN (64 Pas)"), 0, 1, Qt.AlignmentFlag.AlignCenter)
         pistes_grid.addWidget(QLabel("CONTRÔLES"), 0, 2)
+
+        widget_timeline = QWidget()
+        layout_timeline = QHBoxLayout(widget_timeline)
+        layout_timeline.setSpacing(2)
+        layout_timeline.setContentsMargins(0, 0, 0, 0)
+
+        for step in range(64):
+            texte = str((step // 4) + 1) if step % 4 == 0 else "."
+            btn_time = QPushButton(texte)
+            btn_time.setFixedWidth(18)  # Même largeur que les cases à cocher (18px)
+            btn_time.setFocusPolicy(Qt.FocusPolicy.NoFocus)  # Évite de bloquer la barre d'espace
+            btn_time.setStyleSheet("""
+                QPushButton {
+                    background-color: #222;
+                    color: #888;
+                    border: none;
+                    font-size: 9px;
+                    font-weight: bold;
+                }
+                QPushButton:hover {
+                    background-color: #00d4ff;
+                    color: black;
+                }
+            """)
+            # Quand on clique, on appelle la fonction pour sauter à ce pas
+            btn_time.clicked.connect(lambda _, s=step: self.sauter_au_pas(s))
+            layout_timeline.addWidget(btn_time)
+
+        pistes_grid.addWidget(widget_timeline, 0, 1)
+        
 
         for i, piste in enumerate(self.sequenceur_core.pistes):
             widget_nom = QWidget()
@@ -92,6 +123,7 @@ class FenetrePrincipale(QMainWindow):
             for step in range(64):
                 case = QCheckBox()
                 case.setToolTip(f"Pas {step + 1}")
+                case.setFocusPolicy(Qt.FocusPolicy.NoFocus)
                 case.toggled.connect(lambda checked, p=i, s=step: self.sequenceur_core.update_step(p, s, checked))
                 # On réduit un peu la taille des cases pour que 64 tiennent mieux
                 case.setStyleSheet("QCheckBox::indicator { width: 18px; height: 18px; border: 1px solid #555; background: #333; } QCheckBox::indicator:checked { background: #00d4ff; }")
@@ -322,3 +354,16 @@ class FenetrePrincipale(QMainWindow):
         self.label_delay_text.setText(f"{valeur_int}%")
         # On transmet la valeur au moteur via le coeur
         self.sequenceur_core.moteur_audio.intensite_delay = valeur_int / 100.0
+        
+    def keyPressEvent(self, event):
+        """Utilisation de la barre d'espace pour démarrer ou arreter la lectures"""
+        if event.key() == Qt.Key.Key_Space:
+            self.toggle_lecture()
+        else:
+            # Laisse les autres touches fonctionner normalement
+            super().keyPressEvent(event)
+            
+    def sauter_au_pas(self, index_step):
+        """Modifie instantanément la position du curseur de lecture."""
+        self.sequenceur_core.step_actuel = index_step
+        self.update_visuel_step(index_step)
