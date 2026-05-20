@@ -1,8 +1,12 @@
 # src/sequenceur/coeur.py
 import os
 import numpy as np
+from sequenceur.export import AudioExporter
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+base = os.path.abspath(__file__)
+BASE_DIR = os.path.dirname(
+    os.path.dirname(os.path.dirname(base))
+)
 
 class Piste:
     """
@@ -10,7 +14,8 @@ class Piste:
     """
     def __init__(self, nom: str, sample_path: str):
         """
-        Initialise une nouvelle piste avec son pattern rythmique à vide.
+        Initialise une nouvelle piste avec son nom, le chemin du sample
+        et sa grille de 64 pas vide par défaut.
         """
         self.nom = nom
         self.sample_path = sample_path 
@@ -19,10 +24,13 @@ class Piste:
 
 class SequenceurCore:
     """
-    Logique métier du séquenceur.
-    Gère l'état des pistes, le tempo et la coordination de la lecture.
+    Logique principale qui gère le tempo, les pistes et la lecture.
     """
     def __init__(self, moteur_audio_instance):
+        """
+        Initialise le coeur du séquenceur avec le moteur audio, les 
+        pistes par défaut et règle le tempo initial à 120 BPM.
+        """
         self.moteur_audio = moteur_audio_instance
         self.pistes = []
         self._initialiser_pistes()
@@ -31,11 +39,27 @@ class SequenceurCore:
         self.bpm = 120
 
     def _initialiser_pistes(self):
-        """Initialisation des pistes par défaut et chargement des ressources audio."""
+        """
+        Crée les trois pistes de base (Kick, Snare, Hi-Hat) et charge
+        automatiquement leurs fichiers audio en mémoire RAM.
+        """
+        path_kick = (
+            "assets/sounds/Club Techno One Shots/kick/"
+            "Techno Kick 01.wav"
+        )
+        path_snare = (
+            "assets/sounds/Club Techno One Shots/snare/"
+            "Techno Snare 01.wav"
+        )
+        path_hihat = (
+            "assets/sounds/Club Techno One Shots/hi-hat/"
+            "Techno Hi Hat 01.wav"
+        )
+        
         data = [
-            ("Kick", "assets/sounds/Club Techno One Shots/Techno Kick 01.wav"),
-            ("Snare", "assets/sounds/Club Techno One Shots/Techno Snare 01.wav"),
-            ("Hi-Hat", "assets/sounds/Club Techno One Shots/Techno Hi Hat 01.wav")
+            ("Kick", path_kick),
+            ("Snare", path_snare),
+            ("Hi-Hat", path_hihat)
         ]
         
         for nom, path in data:
@@ -46,18 +70,17 @@ class SequenceurCore:
 
     def changer_sample_piste(self, index_piste: int, nouveau_chemin: str):
         """
-        Remplace le fichier audio d'une piste spécifique (Objectif Mars).
-        Met à jour le cache du moteur audio et génère un nouveau nom de piste.
+        Reçoit l'index d'une piste et le chemin d'un nouveau fichier wav, 
+        le charge en mémoire, change la piste et retourne son nouveau nom.
         """
         if 0 <= index_piste < len(self.pistes):
-            # 1. Charger le nouveau son en RAM
             self.moteur_audio.charger_sample_en_memoire(nouveau_chemin)
             
-            # 2. Mettre à jour la piste
             self.pistes[index_piste].sample_path = nouveau_chemin
             
-            # 3. Déduire un nom court à partir du nom du fichier
-            nouveau_nom = os.path.basename(nouveau_chemin).replace('.wav', '')
+            nouveau_nom = os.path.basename(nouveau_chemin).replace(
+                '.wav', ''
+            )
             self.pistes[index_piste].nom = nouveau_nom
             
             return nouveau_nom
@@ -65,7 +88,8 @@ class SequenceurCore:
 
     def jouer_piste_test(self, index_piste: int):
         """
-        Déclenche immédiatement le son d'une piste pour prévisualisation.
+        Reçoit l'index d'une piste pour envoyer directement son fichier
+        audio au moteur et pouvoir l'écouter instantanément.
         """
         if 0 <= index_piste < len(self.pistes):
             path = self.pistes[index_piste].sample_path
@@ -73,15 +97,16 @@ class SequenceurCore:
 
     def update_step(self, index_piste: int, index_step: int, est_actif: bool):
         """
-        Met à jour l'état d'un pas (activé ou désactivé) dans le pattern d'une piste.
+        Met à jour l'état d'une case précise (cochée ou non) dans la 
+        grille de la piste correspondante.
         """
         if 0 <= index_piste < len(self.pistes):
             self.pistes[index_piste].pattern[index_step] = est_actif
 
     def jouer_step_actuel(self):
         """
-        Analyse les patterns de toutes les pistes pour le pas en cours.
-        Envoie la liste des sons à jouer au moteur audio de manière synchronisée.
+        Parcourt toutes les pistes pour le pas en cours et envoie la liste
+        des fichiers audio cochés et non mutés au moteur de lecture.
         """
         chemins_a_jouer = []
         for piste in self.pistes:
@@ -95,86 +120,22 @@ class SequenceurCore:
         
     def pas_suivant(self):
         """
-        Incrémente le compteur de pas et assure le bouclage (0 à 63).
+        Avance le curseur de lecture au pas d'après et le fait revenir
+        au début (0) dès qu'il dépasse le 64ème pas.
         """
         self.step_actuel += 1
         if self.step_actuel >= 64:
             self.step_actuel = 0
 
-    def exporter_donnees(self):
-        """
-        Série de données pour la persistance JSON
-        Capture l'état complet : BPM, volume, effets et patterns de 64 pas.
-        """
-        donnees = {
-            "bpm": self.bpm,
-            "volume": self.moteur_audio.volume_global,
-            "intensite_delay": self.moteur_audio.intensite_delay,
-            "pistes": []
-        }
-        for piste in self.pistes:
-            donnees["pistes"].append({
-                "nom": piste.nom,
-                "sample_path": piste.sample_path,
-                "is_mute": piste.is_mute,
-                "pattern": piste.pattern.copy()
-            })
-        return donnees
-
-    def importer_donnees(self, donnees: dict):
-        """
-        Restaure l'état complet du séquenceur à partir d'un dictionnaire JSON.
-        """
-        self.bpm = donnees.get("bpm", 120)
-        self.moteur_audio.set_volume(donnees.get("volume", 1.0))
-        self.moteur_audio.intensite_delay = donnees.get("intensite_delay", 0.0)
-        
-        pistes_sauvegardees = donnees.get("pistes", [])
-        for i, piste_data in enumerate(pistes_sauvegardees):
-            if i < len(self.pistes):
-                nouveau_chemin = piste_data.get("sample_path", self.pistes[i].sample_path)
-                
-                # Si le chemin a changé dans la sauvegarde, on charge le nouveau son
-                if nouveau_chemin != self.pistes[i].sample_path:
-                    self.changer_sample_piste(i, nouveau_chemin)
-                else:
-                    self.pistes[i].nom = piste_data.get("nom", self.pistes[i].nom)
-                    
-                self.pistes[i].is_mute = piste_data.get("is_mute", False)
-                self.pistes[i].pattern = piste_data.get("pattern", [False] * 64)
-
     def generer_rendu_audio(self, nb_boucles=2):
         """
-        Calcule mathématiquement le mixage de la boucle sans la jouer.
-        Retourne un tableau NumPy prêt à être sauvegardé.
+        Prend le nombre de boucles demandé et transmet les informations 
+        au module d'exportation pour générer le tableau audio final.
         """
-        # Calcul de la durée d'un pas en échantillons
-        # Formule : (60s / BPM / 4) * 44100
-        samples_par_pas = int((60 / self.bpm / 4) * 44100)
-        duree_totale_samples = samples_par_pas * 64 * nb_boucles
-        
-        # Initialisation du buffer (silence)
-        rendu_final = np.zeros(duree_totale_samples, dtype='float32')
-        
-        for piste in self.pistes:
-            if piste.is_mute:
-                continue
-                
-            sample_data = self.moteur_audio.cache_samples.get(piste.sample_path)
-            if sample_data is None:
-                continue
-                
-            for b in range(nb_boucles):
-                for step in range(64):
-                    if piste.pattern[step]:
-                        pos_start = (b * 64 * samples_par_pas) + (step * samples_par_pas)
-                        pos_end = pos_start + len(sample_data)
-                        
-                        if pos_end > duree_totale_samples:
-                            overlap = duree_totale_samples - pos_start
-                            rendu_final[pos_start:] += sample_data[:overlap]
-                        else:
-                            rendu_final[pos_start:pos_end] += sample_data
-                            
-        rendu_final *= self.moteur_audio.volume_global
-        return np.clip(rendu_final, -1.0, 1.0)
+        return AudioExporter.exporter(
+            pistes=self.pistes,
+            bpm=self.bpm,
+            volume_global=self.moteur_audio.volume_global,
+            cache_samples=self.moteur_audio.cache_samples,
+            nb_boucles=nb_boucles
+        )

@@ -34,4 +34,37 @@ THEME_SOMBRE = """
         background-color: #00d4ff;
         color: #000000;
     }
+    
+    /* État normal de toutes les cases à l'arrêt ou hors curseur */
+    QCheckBox::indicator { 
+        width: 18px; 
+        height: 18px; 
+        border: 1px solid #555; 
+        background: #333; 
+    }
+    QCheckBox::indicator:checked { 
+        background: #00d4ff; 
+    }
+
+    /* État lorsque la case est sur le pas actif (Curseur de lecture) */
+    QCheckBox[actif="true"]::indicator {
+        border: 2px solid white;
+        background: #666;
+    }
+    QCheckBox[actif="true"]::indicator:checked {
+        border: 2px solid white;
+        background: #00ffff;
+    }
+    
+    QPushButton#btn_timeline {
+        background-color: #222;
+        color: #888;
+        border: none;
+        font-size: 9px;
+        font-weight: bold;
+    }
+    QPushButton#btn_timeline:hover {
+        background-color: #00d4ff;
+        color: black;
+    }
 """
